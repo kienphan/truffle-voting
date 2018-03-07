@@ -9,41 +9,80 @@ import votingArtifacts from '../../build/contracts/Voting.json'
 
 var Voting = contract(votingArtifacts);
 
-let candidates = {"Rama": "candidate-1", "Nick": "candidate-2", "Jose": "candidate-3"}
+let candidates = {}
+
+let tokenPrice = null;
 
 window.voteForCandidate = function(candidate) {
   let candidateName = $("#candidate").val();
-  try {
-    $("#msg").html("Vote has been submitted. The vote count will increment as soon as the vote is recorded on the blockchain. Please wait.")
-    $("#candidate").val("");
+  let voteTokens = $("#vote-tokens").val();
+  $("#msg").html("Vote has been submitted. The vote count will increment as soon as the vote is recorded on the blockchain. Please wait.")
+  $("#candidate").val("");
+  $("#vote-tokens").val("");
 
-    Voting.deployed().then(function(contractInstance) {
-      contractInstance.voteForCandidate(candidateName, {gas: 140000, from: web3.eth.accounts[0]}).then(function() {
-        let div_id = candidates[candidateName];
-        return contractInstance.totalVotesFor.call(candidateName).then(function(v) {
-          $("#" + div_id).html(v.toString());
-          $("#msg").html("");
-        });
+  Voting.deployed().then(function(contractInstance) {
+    console.log(contractInstance)
+    contractInstance.voteForCandidate(candidateName, voteTokens, {gas: 140000, from: web3.eth.accounts[0]}).then(function() {
+      let div_id = candidates[candidateName];
+      return contractInstance.totalVotesFor.call(candidateName).then(function(v) {
+        $("#" + div_id).html(v.toString());
+        $("#msg").html("");
       });
     });
-  } catch (err) {
-    console.log('Error voting for candidate')
-    console.log(err);
-  }
+  });
 }
 
-$( document ).ready(function() {
-  if (typeof web3 !== 'undefined') {
-    console.warn("Using web3 detected from external source like Metamask")
-    // Use Mist/MetaMask's provider
-    window.web3 = new Web3(web3.currentProvider);
-  } else {
-    console.warn("No web3 detected. Falling back to http://localhost:8545. You should remove this fallback when you deploy live, as it's inherently insecure. Consider switching to Metamask for development. More info here: http://truffleframework.com/tutorials/truffle-and-metamask");
-    // fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
-    window.web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
-  }
+window.buyTokens = function() {
+  let tokensToBuy = $("#buy").val();
+  let price = tokensToBuy * tokenPrice;
+  $("#buy-msg").html("Purchase order has been submitted. Please wait.");
+  Voting.deployed().then(function(contractInstance) {
+    contractInstance.buy({value: web3.toWei(price, 'ether'), from: web3.eth.accounts[0]}).then(function(v) {
+      $("#buy-msg").html("");
+      web3.eth.getBalance(contractInstance.address, function(error, result) {
+        $("#contract-balance").html(web3.fromWei(result.toString()) + " Ether");
+      });
+    })
+  });
+  populateTokenData();
+}
 
-  Voting.setProvider(web3.currentProvider);
+window.lookupVoterInfo = function() {
+  let address = $("#voter-info").val();
+  Voting.deployed().then(function(contractInstance) {
+    contractInstance.voterDetails.call(address).then(function(v) {
+      $("#tokens-bought").html("Total Tokens bought: " + v[0].toString());
+      let votesPerCandidate = v[1];
+      $("#votes-cast").empty();
+      $("#votes-cast").append("Votes cast per candidate: <br>");
+      let allCandidates = Object.keys(candidates);
+      for(let i=0; i < allCandidates.length; i++) {
+        $("#votes-cast").append(allCandidates[i] + ": " + votesPerCandidate[i] + "<br>");
+      }
+    });
+  });
+}
+
+function populateCandidates() {
+  console.log(3)
+  Voting.deployed().then(function(contractInstance) {
+    console.log(contractInstance)
+    contractInstance.allCandidates.call().then(function(candidateArray) {
+      console.log(candidateArray);
+      for(let i=0; i < candidateArray.length; i++) {
+        candidates[web3.toUtf8(candidateArray[i])] = "candidate-" + i;
+      }
+      console.log(5)
+      setupCandidateRows();
+      console.log(6)
+      populateCandidateVotes();
+      populateTokenData();
+    });
+  });
+}
+
+function populateCandidateVotes() {
+  console.log(4)
   let candidateNames = Object.keys(candidates);
   for (var i = 0; i < candidateNames.length; i++) {
     let name = candidateNames[i];
@@ -51,6 +90,49 @@ $( document ).ready(function() {
       contractInstance.totalVotesFor.call(name).then(function(v) {
         $("#" + candidates[name]).html(v.toString());
       });
-    })
+    });
   }
+}
+
+function setupCandidateRows() {
+  Object.keys(candidates).forEach(function (candidate) { 
+    $("#candidate-rows").append("<tr><td>" + candidate + "</td><td id='" + candidates[candidate] + "'></td></tr>");
+  });
+}
+
+function populateTokenData() {
+  Voting.deployed().then(function(contractInstance) {
+    contractInstance.totalTokens().then(function(v) {
+      $("#tokens-total").html(v.toString());
+    });
+    contractInstance.tokensSold.call().then(function(v) {
+      $("#tokens-sold").html(v.toString());
+    });
+    contractInstance.tokenPrice().then(function(v) {
+      tokenPrice = parseFloat(web3.fromWei(v.toString()));
+      $("#token-cost").html(tokenPrice + " Ether");
+    });
+    web3.eth.getBalance(contractInstance.address, function(error, result) {
+      $("#contract-balance").html(web3.fromWei(result.toString()) + " Ether");
+    });
+  });
+}
+
+$( document ).ready(function() {
+  // if (typeof web3 !== 'undefined') {
+  //   console.warn("Using web3 detected from external source like Metamask")
+  //   // Use Mist/MetaMask's provider
+  //   window.web3 = new Web3(web3.currentProvider);
+  // } else {
+  //   console.warn("No web3 detected. Falling back to http://localhost:8545. You should remove this fallback when you deploy live, as it's inherently insecure. Consider switching to Metamask for development. More info here: http://truffleframework.com/tutorials/truffle-and-metamask");
+  //   // fallback - use your fallback strategy (local node / hosted node + in-dapp id mgmt / fail)
+  window.web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
+  // }
+
+
+  Voting.setProvider(web3.currentProvider);
+  console.log(1)
+  populateCandidates();
+  console.log(2)
+
 });
