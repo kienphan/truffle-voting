@@ -64,7 +64,6 @@ window.lookupVoterInfo = function() {
 }
 
 function populateCandidates() {
-  console.log(3)
   Voting.deployed().then(function(contractInstance) {
     console.log(contractInstance)
     contractInstance.allCandidates.call().then(function(candidateArray) {
@@ -72,9 +71,7 @@ function populateCandidates() {
       for(let i=0; i < candidateArray.length; i++) {
         candidates[web3.toUtf8(candidateArray[i])] = "candidate-" + i;
       }
-      console.log(5)
       setupCandidateRows();
-      console.log(6)
       populateCandidateVotes();
       populateTokenData();
     });
@@ -82,7 +79,6 @@ function populateCandidates() {
 }
 
 function populateCandidateVotes() {
-  console.log(4)
   let candidateNames = Object.keys(candidates);
   for (var i = 0; i < candidateNames.length; i++) {
     let name = candidateNames[i];
@@ -131,8 +127,5 @@ $( document ).ready(function() {
 
 
   Voting.setProvider(web3.currentProvider);
-  console.log(1)
   populateCandidates();
-  console.log(2)
-
 });
